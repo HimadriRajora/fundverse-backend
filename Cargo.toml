@@ -4,7 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-web = "4"
+env_logger = "0.10"
+actix-web = { version = "4", features = ["macros", "cookie"] }
 serde = { version = "1.0", features = ["derive"] }
-dotenvy = "0.15"
-sqlx = { version = "0.8", features = ["mysql", "macros", "runtime-tokio-native-tls"] }
+serde_json = "1.0"
+dotenv = "0.15"
+sqlx = { version = "0.8", features = ["mysql", "runtime-tokio-native-tls", "macros", "chrono"] }
+bcrypt = "0.17"
+jsonwebtoken = "9"
+lettre = "0.10"
+rand = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"

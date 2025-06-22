@@ -1,16 +1,17 @@
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
 use serde::Serialize;
-use dotenvy::dotenv;
+use dotenv::dotenv;
 use std::env;
 use sqlx::MySqlPool;
 
-// Define a serializable struct for our JSON response
+mod models;
+mod auth;
+
 #[derive(Serialize)]
 struct Message {
     message: String,
 }
 
-// Basic GET handler for the "/" route
 #[get("/")]
 async fn index() -> impl Responder {
     HttpResponse::Ok().json(Message {
@@ -20,25 +21,36 @@ async fn index() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load environment variables from `.env` file
-    dotenv().ok(); // This loads DATABASE_URL into std::env:contentReference[oaicite:9]{index=9}
+    // Load .env variables
+    dotenv().ok();
 
-    // Read the DATABASE_URL environment variable
-    let database_url = env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set in .env");
-    
-    // Create a connection pool to the MySQL database
+    // Enable the logger (reads RUST_LOG env var)
+    env_logger::init();
+
+    // Read DATABASE_URL and connect
+    let database_url =
+        env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
     let pool = MySqlPool::connect(&database_url)
         .await
-        .expect("Failed to connect to database:contentReference[oaicite:10]{index=10}");
+        .expect("Failed to connect to database");
 
-    // Start the Actix-web HTTP server
+    // Print a startup message
+    println!("🚀 FundVerse backend listening on http://127.0.0.1:8080");
+
+    // Build and run the server
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(pool.clone())) // Share DB pool with handlers:contentReference[oaicite:11]{index=11}
-            .service(index) // Register the index handler for GET "/"
+            .wrap(Logger::default())               // << enable request logging
+            .app_data(web::Data::new(pool.clone()))
+            .service(index)
+            .service(
+                web::scope("/auth")
+                    .route("/signup", web::post().to(auth::signup))
+                    .route("/verify", web::post().to(auth::verify_email))
+                    .route("/login", web::post().to(auth::login)),
+            )
     })
-    .bind(("127.0.0.1", 8080))? // Listen on port 8080 on localhost
+    .bind(("127.0.0.1", 8080))?
     .run()
     .await
 }
