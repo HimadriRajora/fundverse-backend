@@ -1,1 +1,18 @@
+# Rust build artifacts
 /target
+
+# Environment / secrets
+.env
+
+# Node / React (if you add a frontend later)
+node_modules/
+dist/
+
+# Editor settings
+.vscode/
+
+# OS files
+*.log
+.DS_Store
+Thumbs.db
+
