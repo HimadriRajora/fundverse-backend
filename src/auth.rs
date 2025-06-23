@@ -19,7 +19,7 @@ lazy_static! {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Claims {
+pub struct Claims {
     sub: u64,
     username: String,
     exp: usize,

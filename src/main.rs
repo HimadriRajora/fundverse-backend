@@ -6,6 +6,7 @@ use sqlx::MySqlPool;
 
 mod models;
 mod auth;
+mod campaigns;
 
 #[derive(Serialize)]
 struct Message {
@@ -21,33 +22,31 @@ async fn index() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load .env variables
     dotenv().ok();
-
-    // Enable the logger (reads RUST_LOG env var)
     env_logger::init();
 
-    // Read DATABASE_URL and connect
-    let database_url =
-        env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
-    let pool = MySqlPool::connect(&database_url)
-        .await
-        .expect("Failed to connect to database");
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let pool = MySqlPool::connect(&database_url).await.expect("DB connect failed");
 
-    // Print a startup message
     println!("🚀 FundVerse backend listening on http://127.0.0.1:8080");
 
-    // Build and run the server
     HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())               // << enable request logging
+            .wrap(Logger::default())
             .app_data(web::Data::new(pool.clone()))
             .service(index)
             .service(
                 web::scope("/auth")
-                    .route("/signup", web::post().to(auth::signup))
-                    .route("/verify", web::post().to(auth::verify_email))
-                    .route("/login", web::post().to(auth::login)),
+                    .route("/signup",  web::post().to(auth::signup))
+                    .route("/verify",  web::post().to(auth::verify_email))
+                    .route("/login",   web::post().to(auth::login)),
+            )
+            .service(
+                web::scope("/api/campaigns")
+                    .route("",              web::get().to(campaigns::list))
+                    .route("",              web::post().to(campaigns::create))
+                    .route("/{id}",         web::put().to(campaigns::update))
+                    .route("/{id}/pledge",  web::post().to(campaigns::pledge)),
             )
     })
     .bind(("127.0.0.1", 8080))?
