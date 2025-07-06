@@ -17,3 +17,6 @@ lettre = "0.10"
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
+actix-cors = "0.7"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+urlencoding = "2.1"
