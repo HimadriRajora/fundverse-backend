@@ -16,7 +16,7 @@ pub async fn list(
     let limit  = query.limit.unwrap_or(10) as i64;
     let offset = ((query.page.unwrap_or(1) - 1) * limit as u32) as i64;
 
-    let items = sqlx::query_as!(
+    match sqlx::query_as!(
         Campaign,
         r#"
         SELECT id, owner_id, title, description,
@@ -30,9 +30,10 @@ pub async fn list(
     )
     .fetch_all(pool.get_ref())
     .await
-    .unwrap();
-
-    HttpResponse::Ok().json(items)
+    {
+        Ok(rows) => HttpResponse::Ok().json(rows),
+        Err(_)   => HttpResponse::InternalServerError().body("DB error"),
+    }
 }
 
 pub async fn create(
@@ -52,12 +53,14 @@ pub async fn create(
         data.goal_amount
     )
     .execute(pool.get_ref())
-    .await
-    .unwrap();
+    .await;
 
-    let id = res.last_insert_id();
+    if let Err(_) = res {
+        return HttpResponse::InternalServerError().body("Insert failed");
+    }
+    let id = res.unwrap().last_insert_id();
 
-    let record = sqlx::query_as!(
+    match sqlx::query_as!(
         Campaign,
         r#"
         SELECT id, owner_id, title, description,
@@ -69,9 +72,10 @@ pub async fn create(
     )
     .fetch_one(pool.get_ref())
     .await
-    .unwrap();
-
-    HttpResponse::Created().json(record)
+    {
+        Ok(row) => HttpResponse::Created().json(row),
+        Err(_)  => HttpResponse::InternalServerError().body("Fetch failed"),
+    }
 }
 
 pub async fn update(
@@ -81,7 +85,7 @@ pub async fn update(
 ) -> HttpResponse {
     let id = *path;
 
-    sqlx::query!(
+    if let Err(_) = sqlx::query!(
         r#"
         UPDATE campaigns
            SET title = ?, description = ?, goal_amount = ?
@@ -94,9 +98,11 @@ pub async fn update(
     )
     .execute(pool.get_ref())
     .await
-    .unwrap();
+    {
+        return HttpResponse::InternalServerError().body("Update failed");
+    }
 
-    let rec = sqlx::query_as!(
+    match sqlx::query_as!(
         Campaign,
         r#"
         SELECT id, owner_id, title, description,
@@ -108,9 +114,10 @@ pub async fn update(
     )
     .fetch_one(pool.get_ref())
     .await
-    .unwrap();
-
-    HttpResponse::Ok().json(rec)
+    {
+        Ok(row) => HttpResponse::Ok().json(row),
+        Err(_)  => HttpResponse::InternalServerError().body("Fetch failed"),
+    }
 }
 
 pub async fn pledge(
@@ -136,28 +143,75 @@ pub async fn pledge(
     if let Err(_) = res {
         return HttpResponse::InternalServerError().body("Insert pledge failed");
     }
-
     let last_id = res.unwrap().last_insert_id();
 
-    let pledge = sqlx::query_as!(
+    match sqlx::query_as!(
         Pledge,
         r#"
-        SELECT
-            id,
-            user_id,
-            campaign_id,
-            amount     AS "amount!: _",
-            pledged_at
+        SELECT id, user_id, campaign_id,
+               amount AS "amount!: _",
+               pledged_at
           FROM pledges
          WHERE id = ?
         "#,
         last_id
     )
     .fetch_one(pool.get_ref())
-    .await;
+    .await
+    {
+        Ok(row) => HttpResponse::Created().json(row),
+        Err(_)  => HttpResponse::InternalServerError().body("Fetch pledge failed"),
+    }
+}
 
-    match pledge {
-        Ok(p) => HttpResponse::Created().json(p),
-        Err(_) => HttpResponse::InternalServerError().body("Fetch pledge failed"),
+pub async fn list_owned(
+    pool: web::Data<MySqlPool>,
+    path: web::Path<u64>,
+) -> HttpResponse {
+    let user_id = *path;
+
+    match sqlx::query_as!(
+        Campaign,
+        r#"
+        SELECT id, owner_id, title, description,
+               goal_amount, created_at
+          FROM campaigns
+         WHERE owner_id = ?
+         ORDER BY created_at DESC
+        "#,
+        user_id
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    {
+        Ok(rows) => HttpResponse::Ok().json(rows),
+        Err(_)   => HttpResponse::InternalServerError().body("DB error"),
+    }
+}
+
+pub async fn list_pledged(
+    pool: web::Data<MySqlPool>,
+    path: web::Path<u64>,
+) -> HttpResponse {
+    let user_id = *path;
+
+    match sqlx::query_as!(
+        Campaign,
+        r#"
+        SELECT c.id, c.owner_id, c.title, c.description,
+               c.goal_amount, c.created_at
+          FROM campaigns c
+          JOIN pledges p ON p.campaign_id = c.id
+         WHERE p.user_id = ?
+         GROUP BY c.id
+         ORDER BY c.created_at DESC
+        "#,
+        user_id
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    {
+        Ok(rows) => HttpResponse::Ok().json(rows),
+        Err(_)   => HttpResponse::InternalServerError().body("DB error"),
     }
 }

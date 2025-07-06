@@ -6,6 +6,7 @@ use dotenv::dotenv;
 use serde::Serialize;
 use sqlx::MySqlPool;
 use std::env;
+use campaigns::{list_owned, list_pledged};
 
 mod auth;
 mod campaigns;
@@ -62,6 +63,11 @@ async fn main() -> std::io::Result<()> {
                     .route("/{id}", web::put().to(campaigns::update))
                     .route("/{id}/pledge", web::post().to(campaigns::pledge)),
             )
+            .service(
+                web::scope("/api/users")
+                    .route("/{uid}/campaigns", web::get().to(list_owned))
+                    .route("/{uid}/pledges",  web::get().to(list_pledged)),
+)
             .service(
                 web::scope("/api/ml")
                     .service(ml::translate)
